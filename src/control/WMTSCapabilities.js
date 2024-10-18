@@ -110,6 +110,7 @@ var ol_control_WMTSCapabilities = class olcontrolWMTSCapabilities extends ol_con
    * @returns {boolean}
    */
   isSupportedSet(tm) {
+    if (/^PM_.*/.test(tm.TileMatrixSet)) return true;
     return this.supportedSets.indexOf(tm.TileMatrixSet) >= 0;
   }
   /** Return a WMTS options for the given capabilities

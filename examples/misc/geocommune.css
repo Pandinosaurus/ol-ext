@@ -1,0 +1,17 @@
+#map {
+  position: fixed;
+  inset: 0;
+}
+
+.wait {
+  display: none;
+}
+
+.ol-ext-dialog .ol-content {
+  overflow: visible!important;
+}
+.ol-ext-dialog p {
+  margin: 0 -1em 1em;
+  padding: 0.5em 1em;
+  background: #ff8;
+}

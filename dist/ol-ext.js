@@ -1,7 +1,7 @@
 /**
  * ol-ext - A set of cool extensions for OpenLayers (ol) in node modules structure
  * @description ol3,openlayers,popup,menu,symbol,renderer,filter,canvas,interaction,split,statistic,charts,pie,LayerSwitcher,toolbar,animation
- * @version v4.0.35
+ * @version v4.0.39
  * @author Jean-Marc Viglino
  * @see https://github.com/Viglino/ol-ext#,
  * @license BSD-3-Clause
@@ -2480,6 +2480,7 @@ ol.ext.input.Slider = class olextinputSlider extends ol.ext.input.Base {
  *  @param {string} [options.className]
  *  @param {ol.colorLike} [options.color] default color
  *  @param {Element} [options.input] input element, if non create one
+ *  @param {string} [options.ariaLabel=""] label
  *  @param {Element} [options.parent] parent element, if create an input
  *  @param {string} [options.position='popup'] fixed | static | popup | inline (no popup)
  *  @param {boolean} [options.autoClose=true] close when click on color
@@ -2522,10 +2523,23 @@ ol.ext.input.PopupBase = class olextinputPopupBase extends ol.ext.input.Base {
       if (this.isCollapsed())
         setTimeout(function () { this.collapse(false); }.bind(this));
     }.bind(this));
+    this.element.id = 'popup_button_'+ol.util.getUid(this);
     this._elt = {};
     // Popup container
-    this._elt.popup = ol.ext.element.create('DIV', { className: 'ol-popup', parent: this.element });
+    this._elt.popup = ol.ext.element.create('DIV', { 
+      className: 'ol-popup', 
+      id: 'popup_' + ol.util.getUid(this),
+      parent: this.element 
+    });
     this._elt.popup.addEventListener('click', function (e) { e.stopPropagation(); });
+    // Accessibility
+    this.element.ariaLabel = options.ariaLabel || '';
+    this.element.ariaExpanded = false;
+    this.element.role = 'button';
+    this.element.setAttribute('aria-controls', this._elt.popup.id);
+    this.on('collapse', e => {
+      this.element.ariaExpanded = e.visible;
+    });
     // Hide on click outside
     var down = false;
     this._elt.popup.addEventListener('pointerdown', function () {
@@ -2881,8 +2895,10 @@ ol.ext.input.Collection = class olextinputCollection extends ol.Object {
  *  @param {Element} [options.input] input element, if non create one
  *  @param {Element} [options.parent] parent element, if create an input
  *  @param {boolean} [options.hastab=false] use tabs for palette / picker
+ *  @param {string} [options.ariaLabel="color picker"] label
  *  @param {string} [options.paletteLabel="palette"] label for the palette tab
  *  @param {string} [options.pickerLabel="picker"] label for the picker tab
+ *  @param {string} [options.eyeDropperLabel="eyedropper"] label for the picker tab
  *  @param {string} [options.position='popup'] fixed | static | popup | inline (no popup)
  *  @param {boolean} [options.opacity=true] enable opacity
  *  @param {boolean} [options.autoClose=true] close when click on color
@@ -2891,6 +2907,7 @@ ol.ext.input.Collection = class olextinputCollection extends ol.Object {
 ol.ext.input.Color = class olextinputColor extends ol.ext.input.PopupBase {
   constructor(options) {
     options = options || {};
+    options.ariaLabel = options.ariaLabel || "color picker";
     options.hidden = options.hidden !== false;
     options.className = ('ol-ext-colorpicker ' + (options.hastab ? 'ol-tab ' : '') + (options.className || '')).trim();
     super(options);
@@ -2998,6 +3015,31 @@ ol.ext.input.Color = class olextinputColor extends ol.ext.input.PopupBase {
     this._elt.g = ol.ext.element.create('INPUT', { type: 'number', lang: 'en-GB', change: changergb, min: 0, max: 255, parent: rgb });
     this._elt.b = ol.ext.element.create('INPUT', { type: 'number', lang: 'en-GB', change: changergb, min: 0, max: 255, parent: rgb });
     this._elt.a = ol.ext.element.create('INPUT', { type: 'number', lang: 'en-GB', change: changergb, min: 0, max: 1, step: .1, parent: rgb });
+    var inputDiv = ol.ext.element.create('DIV', { className: 'ol-txtcolor', parent: container });
+    // Eye dropper (if possible)
+    if (window.EyeDropper) {
+      var self = this
+      // Pick up color from screen
+      async function pickColor() {
+        var eyeDropper = new EyeDropper();
+        try {
+          var pickedColor = await eyeDropper.open();
+          self.setColor(pickedColor.sRGBHex);
+        } catch (error) {
+          /* oops */
+        }
+      }
+      this.element.classList.add('eyedropper');
+      // add button
+      ol.ext.element.create('BUTTON', {
+        title: options.eyeDropperLabel || 'eyedropper',
+        ariaLabel: options.eyeDropperLabel || 'eyedropper',
+        className: 'ol-eyedropper',
+        type: 'button',
+        click: pickColor,
+        parent: inputDiv
+      });
+    }
     // Text color input
     this._elt.txtColor = ol.ext.element.create('INPUT', {
       type: 'text',
@@ -3013,7 +3055,7 @@ ol.ext.input.Color = class olextinputColor extends ol.ext.input.PopupBase {
         if (color)
           this.setColor(color);
       }.bind(this),
-      parent: container
+      parent: inputDiv
     });
     ol.ext.element.create('BUTTON', {
       html: 'OK',
@@ -3377,8 +3419,9 @@ ol.ext.input.List = class olextinputList extends ol.ext.input.Base {
       className: 'ol-input-popup' + (options.hover ? ' ol-hover' : '')
     });
     this.set('hideOnClick', options.hideOnClick !== false);
-    if (options.className)
+    if (options.className) {
       this.element.classList.add(options.className);
+    }
     if (options.fixed) {
       this.element.classList.add('ol-fixed');
       this.set('hideOnClick', false);
@@ -3394,8 +3437,9 @@ ol.ext.input.List = class olextinputList extends ol.ext.input.Base {
         break;
     }
     var input = this.input;
-    if (input.parentNode)
+    if (input.parentNode) {
       input.parentNode.insertBefore(this.element, input);
+    }
     this.element.appendChild(input);
     var popup = this.popup = ol.ext.element.create('UL', {
       className: 'ol-popup',
@@ -8658,6 +8702,7 @@ ol.control.Disable = class olcontrolDisable extends ol.control.Control {
  *	@param {String} options.className class of the control
  *	@param {String} options.target Specify a target if you want the control to be rendered outside of the map's viewport.
  *	@param {boolean} options.edition false to remove the edition tools, default true
+ *	@param {boolean} options.drawOptions false to remove the draw options bar
  *	@param {Object} options.interactions List of interactions to add to the bar 
  *    ie. Select, Delete, Info, DrawPoint, DrawLine, DrawPolygon
  *    Each interaction can be an interaction or true (to get the default one) or false to remove it from bar
@@ -8837,34 +8882,44 @@ ol.control.EditBar = class olcontrolEditBar extends ol.control.Bar {
           }
         })
       }
-      var ledit = new ol.control.Toggle({
-        className: 'ol-drawline',
-        title: this._getTitle(options.interactions.DrawLine) || 'LineString',
-        name: 'DrawLine',
-        interaction: this._interactions.DrawLine,
-        // Options bar associated with the control
-        bar: new ol.control.Bar({
-          controls: [
-            new ol.control.TextButton({
-              html: this._getTitle(options.interactions.UndoDraw) || 'undo',
-              title: this._getTitle(options.interactions.UndoDraw) || "delete last point",
-              handleClick: function () {
-                if (ledit.getInteraction().nbpts > 1)
-                  ledit.getInteraction().removeLastPoint()
-              }
-            }),
-            new ol.control.TextButton({
-              html: this._getTitle(options.interactions.FinishDraw) || 'finish',
-              title: this._getTitle(options.interactions.FinishDraw) || "finish",
-              handleClick: function () {
-                // Prevent null objects on finishDrawing
-                if (ledit.getInteraction().nbpts > 2)
-                  ledit.getInteraction().finishDrawing()
-              }
-            })
-          ]
+      var ledit
+      if (options.drawOptions !== false) {
+        ledit = new ol.control.Toggle({
+          className: 'ol-drawline',
+          title: this._getTitle(options.interactions.DrawLine) || 'LineString',
+          name: 'DrawLine',
+          interaction: this._interactions.DrawLine,
+          // Options bar associated with the control
+          bar: new ol.control.Bar({
+            controls: [
+              new ol.control.TextButton({
+                html: this._getTitle(options.interactions.UndoDraw) || 'undo',
+                title: this._getTitle(options.interactions.UndoDraw) || "delete last point",
+                handleClick: function () {
+                  if (ledit.getInteraction().nbpts > 1)
+                    ledit.getInteraction().removeLastPoint()
+                }
+              }),
+              new ol.control.TextButton({
+                html: this._getTitle(options.interactions.FinishDraw) || 'finish',
+                title: this._getTitle(options.interactions.FinishDraw) || "finish",
+                handleClick: function () {
+                  // Prevent null objects on finishDrawing
+                  if (ledit.getInteraction().nbpts > 2)
+                    ledit.getInteraction().finishDrawing()
+                }
+              })
+            ]
+          })
         })
-      })
+      } else {
+        ledit = new ol.control.Toggle({
+          className: 'ol-drawline',
+          title: this._getTitle(options.interactions.DrawLine) || 'LineString',
+          name: 'DrawLine',
+          interaction: this._interactions.DrawLine,
+        })
+      }
       this.addControl(ledit)
     }
     if (options.interactions.DrawPolygon !== false) {
@@ -8965,34 +9020,44 @@ ol.control.EditBar = class olcontrolEditBar extends ol.control.Bar {
    * @private
    */
   _setDrawPolygon(className, interaction, title, name, options) {
-    var fedit = new ol.control.Toggle({
-      className: className,
-      name: name,
-      title: title,
-      interaction: interaction,
-      // Options bar associated with the control
-      bar: new ol.control.Bar({
-        controls: [
-          new ol.control.TextButton({
-            html: this._getTitle(options.interactions.UndoDraw) || 'undo',
-            title: this._getTitle(options.interactions.UndoDraw) || 'undo last point',
-            handleClick: function () {
-              if (fedit.getInteraction().nbpts > 1)
-                fedit.getInteraction().removeLastPoint()
-            }
-          }),
-          new ol.control.TextButton({
-            html: this._getTitle(options.interactions.FinishDraw) || 'finish',
-            title: this._getTitle(options.interactions.FinishDraw) || 'finish',
-            handleClick: function () {
-              // Prevent null objects on finishDrawing
-              if (fedit.getInteraction().nbpts > 3)
-                fedit.getInteraction().finishDrawing()
-            }
-          })
-        ]
+    var fedit
+    if (options.drawOptions !== false) {
+      fedit = new ol.control.Toggle({
+        className: className,
+        name: name,
+        title: title,
+        interaction: interaction,
+        // Options bar associated with the control
+        bar: new ol.control.Bar({
+          controls: [
+            new ol.control.TextButton({
+              html: this._getTitle(options.interactions.UndoDraw) || 'undo',
+              title: this._getTitle(options.interactions.UndoDraw) || 'undo last point',
+              handleClick: function () {
+                if (fedit.getInteraction().nbpts > 1)
+                  fedit.getInteraction().removeLastPoint()
+              }
+            }),
+            new ol.control.TextButton({
+              html: this._getTitle(options.interactions.FinishDraw) || 'finish',
+              title: this._getTitle(options.interactions.FinishDraw) || 'finish',
+              handleClick: function () {
+                // Prevent null objects on finishDrawing
+                if (fedit.getInteraction().nbpts > 3)
+                  fedit.getInteraction().finishDrawing()
+              }
+            })
+          ]
+        })
       })
-    })
+    } else {
+      fedit = new ol.control.Toggle({
+        className: className,
+        name: name,
+        title: title,
+        interaction: interaction,
+      })
+    }
     this.addControl(fedit)
     return fedit
   }
@@ -9929,18 +9994,18 @@ ol.control.GeoBookmark = class olcontrolGeoBookmark extends ol.control.Control {
     var ul = this.element.querySelector("ul");
     var self = this;
     ul.innerHTML = '';
-    for (var b in bmark) {
+    Object.keys(bmark).forEach(function(b) {
       var li = document.createElement('li');
       li.textContent = b;
       li.setAttribute('data-bookmark', JSON.stringify(bmark[b]));
       li.setAttribute('data-name', b);
       li.addEventListener('click', function (e) {
-        var bm = JSON.parse(e.target.getAttribute("data-bookmark"));
+        var bm = JSON.parse(li.getAttribute("data-bookmark"));
         this.getMap().getView().setCenter(bm.pos);
         if (bm.zoom !== undefined) this.getMap().getView().setZoom(bm.zoom);
         if (bm.rot !== undefined) this.getMap().getView().setRotation(bm.rot || 0);
         this.element.classList.add('ol-collapsed')
-        this.dispatchEvent({ type: 'select', name: e.target.getAttribute("data-name"), bookmark: bm });
+        this.dispatchEvent({ type: 'select', name: li.getAttribute("data-name"), bookmark: bm });
       }.bind(this));
       ul.appendChild(li);
       if (modify && !bmark[b].permanent) {
@@ -9955,7 +10020,7 @@ ol.control.GeoBookmark = class olcontrolGeoBookmark extends ol.control.Control {
         });
         li.appendChild(button);
       }
-    }
+    }.bind(this));
     try {
       localStorage[this.get('namespace') + "@bookmark"] = JSON.stringify(bmark);
     } catch (e) { console.warn('Failed to access localStorage...'); }
@@ -13355,6 +13420,7 @@ ol.control.Print = class olcontrolPrint extends ol.control.Control {
  * @extends {ol.control.Control}
  * @author https://github.com/chicoff (italian i18n)
  * @author https://github.com/cvpereira (Brazil pt-br i18n)
+ * @author https://github.com/chicoff (Romansh rm i18n)
  * @param {Object=} options Control options.
  *	@param {string} options.className class of the control
  *	@param {String} options.title button title
@@ -14286,6 +14352,32 @@ ol.control.PrintDialog.prototype._labels = {
     small: 'Pequeno',
     large: 'Grande',
     cancel: 'Cancelar'
+  },
+  'rm': {
+    title: 'Stampar',
+    orientation: 'Orientaziun',
+    portrait: 'Vertical',
+    landscape: 'Horizontal',
+    size: 'Format',
+    custom: 'Grondezza dal monitur',
+    margin: 'Margin',
+    scale: 'Stgala',
+    legend: 'Legenda',
+    north: 'Fritga nord',
+    mapTitle: 'Titel',
+    saveas: 'Memorisar sco...',
+    saveLegend: 'Memorisar legenda...',
+    copied: '\u2714 Copià en las notizias',
+    errorMsg: 'Betg memorisar la carta',
+    printBt: 'Stampar',
+    clipboardFormat: 'Copia en las notizias...',
+    jpegFormat: 'Memorisar sco jpeg',
+    pngFormat: 'Memorisar sco png',
+    pdfFormat: 'Memorisar sco pdf',
+    none: 'betg',
+    small: 'pitschen',
+    large: 'grond',
+    cancel: 'Stizzar'
   }
 };
 /** List of paper size */
@@ -17904,14 +17996,14 @@ ol.control.SearchGeoportailParcelle = class olcontrolSearchGeoportailParcelle ex
     }
     // Arrondissement
     var district = this._inputParcelle.arrond.value;
-    if (district) {
+    if (district && !prefix) {
       var n = this._arrond.length - district.length;
-      district = this._arrond.substr(0,n) + district;
+      prefix = this._arrond.substr(0,n) + district;
     }
     // Get parcelle number
     var section = complete(this._inputParcelle.section.value, 2);
     var numero = complete(this._inputParcelle.numero.value, 4, '0');
-    this.searchParcelle(commune, district, prefix, section, numero,
+    this.searchParcelle(commune, '', prefix, section, numero,
       function (jsonResp) {
         this._listParcelle(jsonResp);
       }.bind(this),
@@ -17924,7 +18016,7 @@ ol.control.SearchGeoportailParcelle = class olcontrolSearchGeoportailParcelle ex
    * @param {function} success callback function called on success
    * @param {function} error callback function called on error
    */
-  searchParcelle(commune, district, prefix, section, numero, success /*, error */) {
+  searchParcelle(commune, olcode, prefix, section, numero, success /*, error */) {
     // Search url
     var url = this.get('url').replace('ols/apis/completion', 'geoportail/ols').replace('completion', 'search');
     // v2 ?
@@ -17974,8 +18066,8 @@ ol.control.SearchGeoportailParcelle = class olcontrolSearchGeoportailParcelle ex
       this.ajax(url + '?index=parcel&q='
         + '&departmentcode=' + commune.substr(0,2)
         + '&municipalitycode=' + commune.substr(-3)
-        + (prefix ? '&oldmunicipalitycode=' + prefix.replace(/_/g, '0') : '')
-        + (district ? '&districtcode=' + district : '')
+        + (prefix ? '&districtcode=' + prefix.replace(/_/g, '0') : '')
+        + (olcode ? '&oldmunicipalitycode=' + olcode : '')
         + (section ? '&section=' + section.toUpperCase() : '')
         + (numero ? '&number=' + numero : '')
         + '&limit=20',
@@ -19397,10 +19489,8 @@ ol.control.Swipe = class olcontrolSwipe extends ol.control.Control {
     this.precomposeLeft_ = this.precomposeLeft.bind(this);
     this.postcompose_ = this.postcompose.bind(this);
     this.layers = [];
-    if (options.layers)
-      this.addLayer(options.layers, false);
-    if (options.rightLayers)
-      this.addLayer(options.rightLayers, true);
+    if (options.layers) this.addLayer(options.layers, false);
+    if (options.rightLayers) this.addLayer(options.rightLayers, true);
     this.on('propertychange', function (e) {
       if (this.getMap()) {
         try { this.getMap().renderSync(); } catch (e) { /* ok */ }
@@ -19452,10 +19542,11 @@ ol.control.Swipe = class olcontrolSwipe extends ol.control.Control {
       this._listener = [];
       for (i = 0; i < this.layers.length; i++) {
         l = this.layers[i];
-        if (l.right)
+        if (l.right) {
           l.layer.on(['precompose', 'prerender'], this.precomposeRight_);
-        else
+        } else {
           l.layer.on(['precompose', 'prerender'], this.precomposeLeft_);
+        }
         l.layer.on(['postcompose', 'postrender'], this.postcompose_);
       }
       try { map.renderSync(); } catch (e) { /* ok */ }
@@ -19482,10 +19573,11 @@ ol.control.Swipe = class olcontrolSwipe extends ol.control.Control {
       if (this.isLayer_(l) < 0) {
         this.layers.push({ layer: l, right: right });
         if (this.getMap()) {
-          if (right)
+          if (right) {
             l.on(['precompose', 'prerender'], this.precomposeRight_);
-          else
+          } else {
             l.on(['precompose', 'prerender'], this.precomposeLeft_);
+          }
           l.on(['postcompose', 'postrender'], this.postcompose_);
           try { this.getMap().renderSync(); } catch (e) { /* ok */ }
         }
@@ -19655,10 +19747,10 @@ ol.control.Swipe = class olcontrolSwipe extends ol.control.Control {
     if (ctx instanceof WebGLRenderingContext) {
       if (e.type === 'prerender') {
         // Clear
-        if (this._lefttime != e.frameState.time) {
+        if (ctx._lefttime != e.frameState.time) {
           ctx.clearColor(0, 0, 0, 0);
           ctx.clear(ctx.COLOR_BUFFER_BIT);
-          this._lefttime = e.frameState.time;
+          ctx._lefttime = e.frameState.time;
         }
         // Clip
         ctx.enable(ctx.SCISSOR_TEST);
@@ -19708,10 +19800,10 @@ ol.control.Swipe = class olcontrolSwipe extends ol.control.Control {
     if (ctx instanceof WebGLRenderingContext) {
       if (e.type === 'prerender') {
         // Clear
-        if (this._righttime != e.frameState.time) {
+        if (ctx._righttime != e.frameState.time) {
           ctx.clearColor(0, 0, 0, 0);
           ctx.clear(ctx.COLOR_BUFFER_BIT);
-          this._righttime = e.frameState.time;
+          ctx._righttime = e.frameState.time;
         }
         // Clip
         ctx.enable(ctx.SCISSOR_TEST);
@@ -31937,7 +32029,7 @@ ol.interaction.Transform = class olinteractionTransform extends ol.interaction.P
   /** Rotate feature from map view rotation
    * @param {ol.Feature} f the feature
    * @param {boolean} clone clone resulting geom
-   * @param {ol.geom.Geometry} rotated geometry
+   * @returns {ol.geom.Geometry | undefined} rotated geometry if no/bad geom
    */
   getGeometryRotateToZero_(f, clone) {
     var origGeom = f.getGeometry()
@@ -31968,8 +32060,10 @@ ol.interaction.Transform = class olinteractionTransform extends ol.interaction.P
     var i, f, geom
     var keepRectangle = this.selection_.item(0) && this._isRectangle(this.selection_.item(0).getGeometry())
     this.overlayLayer_.getSource().clear()
-    if (!this.selection_.getLength())
+    // No selection or bad geometry
+    if (!this.selection_.getLength() || !this.selection_.item(0).getGeometry()) {
       return
+    }
     var viewRotation = this.getMap().getView().getRotation()
     var ext = this.getGeometryRotateToZero_(this.selection_.item(0)).getExtent()
     var coords
@@ -32009,6 +32103,14 @@ ol.interaction.Transform = class olinteractionTransform extends ol.interaction.P
           ])
         }
       }
+      // Check extent
+      if (ext[2] < ext[0]) {
+        ext = [ext[2], ext[1], ext[0], ext[3]];
+      }
+      if (ext[3] < ext[1]) {
+        ext = [ext[0], ext[3], ext[2], ext[1]];
+      }
+      // Geom from extent
       geom = keepRectangle ? new ol.geom.Polygon([coords]) : ol.geom.Polygon.fromExtent(ext)
       if (this.get('enableRotatedTransform') && viewRotation !== 0) {
         geom.rotate(viewRotation, this.getMap().getView().getCenter())
@@ -32310,6 +32412,7 @@ ol.interaction.Transform = class olinteractionTransform extends ol.interaction.P
             scx = scy = Math.min(scx, scy)
           }
         }
+        var keepAspectRatio = this.get('keepAspectRatio')(evt)
         for (i = 0, f; f = this.selection_.item(i); i++) {
           geometry = (viewRotation === 0 || !this.get('enableRotatedTransform')) ? this.geoms_[i].clone() : this.rotatedGeoms_[i].clone()
           geometry.applyTransform(function (g1, g2, dim) {
@@ -32338,10 +32441,15 @@ ol.interaction.Transform = class olinteractionTransform extends ol.interaction.P
                   g2[j + 1] = coordsToChange.includes(j) ? g1[j + 1] + projectedVector[1] : g1[j + 1]
                 }
               } else {
-                var projectedLeft, projectedRight
+                var projectedLeft, projectedRight, snapped
                 switch (opt) {
-                  case 0:
-                    displacementVector = this._countVector(pointD, dragCoordinate)
+                  case 0: // Dragging D
+                    if (keepAspectRatio) {
+                      snapped = this._snapToDiagonal(pointD, pointB, dragCoordinate);
+                      displacementVector = this._countVector(pointD, snapped);
+                    } else {
+                      displacementVector = this._countVector(pointD, dragCoordinate);
+                    }
                     projectedLeft = this._projectVectorOnVector(displacementVector, this._countVector(pointC, pointD))
                     projectedRight = this._projectVectorOnVector(displacementVector, this._countVector(pointA, pointD));
                     [g2[0], g2[1]] = this._movePoint(pointA, projectedLeft);
@@ -32349,8 +32457,13 @@ ol.interaction.Transform = class olinteractionTransform extends ol.interaction.P
                     [g2[6], g2[7]] = this._movePoint(pointD, displacementVector);
                     [g2[8], g2[9]] = this._movePoint(pointA1, projectedLeft)
                     break
-                  case 1:
-                    displacementVector = this._countVector(pointA, dragCoordinate)
+                  case 1: // Dragging A
+                    if (keepAspectRatio) {
+                      snapped = this._snapToDiagonal(pointA, pointC, dragCoordinate);
+                      displacementVector = this._countVector(pointA, snapped);
+                    } else {
+                      displacementVector = this._countVector(pointA, dragCoordinate);
+                    }
                     projectedLeft = this._projectVectorOnVector(displacementVector, this._countVector(pointD, pointA))
                     projectedRight = this._projectVectorOnVector(displacementVector, this._countVector(pointB, pointA));
                     [g2[0], g2[1]] = this._movePoint(pointA, displacementVector);
@@ -32358,8 +32471,13 @@ ol.interaction.Transform = class olinteractionTransform extends ol.interaction.P
                     [g2[6], g2[7]] = this._movePoint(pointD, projectedRight);
                     [g2[8], g2[9]] = this._movePoint(pointA1, displacementVector)
                     break
-                  case 2:
-                    displacementVector = this._countVector(pointB, dragCoordinate)
+                  case 2: // Dragging B
+                    if (keepAspectRatio) {
+                      snapped = this._snapToDiagonal(pointB, pointD, dragCoordinate);
+                      displacementVector = this._countVector(pointB, snapped);
+                    } else {
+                      displacementVector = this._countVector(pointB, dragCoordinate);
+                    }
                     projectedLeft = this._projectVectorOnVector(displacementVector, this._countVector(pointA, pointB))
                     projectedRight = this._projectVectorOnVector(displacementVector, this._countVector(pointC, pointB));
                     [g2[0], g2[1]] = this._movePoint(pointA, projectedRight);
@@ -32367,8 +32485,13 @@ ol.interaction.Transform = class olinteractionTransform extends ol.interaction.P
                     [g2[4], g2[5]] = this._movePoint(pointC, projectedLeft);
                     [g2[8], g2[9]] = this._movePoint(pointA1, projectedRight)
                     break
-                  case 3:
-                    displacementVector = this._countVector(pointC, dragCoordinate)
+                  case 3: // Dragging C
+                    if (keepAspectRatio) {
+                      snapped = this._snapToDiagonal(pointC, pointA, dragCoordinate);
+                      displacementVector = this._countVector(pointC, snapped);
+                    } else {
+                       displacementVector = this._countVector(pointC, dragCoordinate);
+                    }
                     projectedLeft = this._projectVectorOnVector(displacementVector, this._countVector(pointB, pointC))
                     projectedRight = this._projectVectorOnVector(displacementVector, this._countVector(pointD, pointC));
                     [g2[2], g2[3]] = this._movePoint(pointB, projectedRight);
@@ -32488,6 +32611,17 @@ ol.interaction.Transform = class olinteractionTransform extends ol.interaction.P
    */
   _movePoint(point, displacementVector) {
     return [point[0]+displacementVector[0], point[1]+displacementVector[1]];
+  }
+  /**
+   * @private
+   */
+  _snapToDiagonal(handle, anchor, mouse) {
+    var rail = [handle[0] - anchor[0], handle[1] - anchor[1]];
+    var pull = [mouse[0] - anchor[0], mouse[1] - anchor[1]];
+    var dot = pull[0] * rail[0] + pull[1] * rail[1];
+    var magSq = rail[0] * rail[0] + rail[1] * rail[1];
+    var s = dot / magSq;
+    return [anchor[0] + rail[0] * s, anchor[1] + rail[1] * s];
   }
 }
 /** Cursors for transform
@@ -33274,6 +33408,245 @@ ol.source.BinBase = class olsourceBinBase extends ol.source.Vector {
     return this._origin;
   }
 }
+
+/** Contour source
+ * Generate contour polygons from grid data using d3-contour.
+ * Coordinates are assumed to be in EPSG:4326.
+ * Author: KingLL2000
+ *
+ * Tips：Import D3 before using ol.source.Contour
+ * 
+ * Main input is a regular grid:
+ * `{ x:number[][], y:number[][], z:number[][] }`.
+ *
+ * - `x`: longitude/easting matrix
+ * - `y`: latitude/northing matrix
+ * - `z`: value matrix (`null` / `undefined` treated as no-data)
+ *
+ * @remarks
+ * This source only accepts grid data. You must pass `options.data` and `options.thresholds`.
+ * It does not compute min/max, does not normalize values, and does not perform coordinate transforms.
+ * Style the result in a vector layer using the feature `value` attribute.
+ * Thresholds can be set via the class property source.thresholds. Use a number of levels; it is passed directly to d3-contour.
+ * tips：Import D3 before using ol.source.Contour
+ * @constructor
+ * @extends {ol/source/Vector}
+ * @param {*} [options] extend ol/source/Vector options
+ *  @param {Object} [options.factory] d3.contours 
+ *  @param {Object} [options.data] grid data {x,y,z}
+ *  @param {number} options.thresholds contour thresholds
+ * @example
+ * var data = {
+ *   x: [[8.475, 8.5, 8.525], [8.475, 8.5, 8.525]],
+ *   y: [[47.42, 47.42, 47.42], [47.4, 47.4, 47.4]],
+ *   z: [[null, 2, null], [2, 5, 2]]
+ * };
+ * var source = new ol.source.Contour({
+ *   factory:d3.contours,
+ *   data: data,
+ *   thresholds: 6 // number of levels
+ * });
+ *
+ * var layer = new ol.layer.Vector({
+ *   source: source,
+ *   style: function (f) {
+ *     var v = Number(f.get("value")) || 0;
+ *     return new ol.style.Style({
+ *       fill: new ol.style.Fill({ color: v > 12 ? "#67001f" : "#eaf1f5" }),
+ *       stroke: new ol.style.Stroke({ color: "#053061", width: 1 })
+ *     });
+ *   }
+ * });
+ */
+ol.source.Contour = class olsourceContour extends ol.source.Vector {
+  constructor(options) {
+    options = options || {};
+    var data = options.data;
+    delete options.data;
+    super(options);
+    if (options.factory) {
+        this._factory = options.factory;
+    } else {
+        if (typeof d3 !== "undefined" && typeof d3.contours === "function") {
+            this._factory = d3.contours;
+        } else {
+            throw new Error("factory parameter missing, d3.contours not found");
+        }
+    }
+    this._grid = null;
+    this.set("thresholds", options.thresholds);
+    if (data) {
+      this.setData(data);
+    } else {
+      this.calculateContours();
+    }
+  }
+  /** Set grid data
+   * @param {{x:number[][],y:number[][],z:number[][]}} data
+   */
+  setData(data) {
+    this._grid = this._normalizeGridData(data);
+    this.calculateContours();
+  }
+  /** Get contour thresholds
+   * @returns {number|undefined}
+   */
+  get thresholds() {
+    return this.get("thresholds");
+  }
+  /** Set contour thresholds
+   * @param {number} value
+   */
+  set thresholds(value) {
+    this.set("thresholds", value);
+    this.calculateContours();
+  }
+  /** Recompute contour polygons
+   */
+  calculateContours() {
+    this.clear();
+    var contourFactory = this._getContourFactory();
+    if (!contourFactory) {
+      console.error("d3-contour is not available.");
+      return;
+    }
+    var grid = this._grid;
+    if (!grid) return;
+    var thresholds = this.get("thresholds");
+    if (typeof thresholds === "undefined" || thresholds === null) return;
+    var contour = contourFactory()
+      .size([grid.width, grid.height])
+      .thresholds(thresholds);
+    var polygons = contour(grid.values);
+    polygons.forEach(function (g) {
+      if (!g.coordinates || !g.coordinates.length) return;
+      var geom = new ol.geom.MultiPolygon(this._gridToMapCoordinates(g.coordinates, grid));
+      var feature = new ol.Feature(geom);
+      feature.set("value", g.value);
+      this.addFeature(feature);
+    }.bind(this));
+  }
+  /** Get contour factory in module/browser contexts
+   * @returns {function|null}
+   * @private
+   */
+  _getContourFactory() {
+    return this._factory;
+  }
+  /** Normalize grid data (lightweight validation only)
+   * @param {{x:number[][],y:number[][],z:number[][]}} data
+   * @returns {*}
+   * @private
+   */
+  _normalizeGridData(data) {
+    if (
+      !data ||
+      !Array.isArray(data.x) ||
+      !Array.isArray(data.y) ||
+      !Array.isArray(data.z)
+    ) {
+      throw new Error(
+        "[ol/source/Contour] Invalid grid data, expected {x:number[][], y:number[][], z:number[][]}.",
+      );
+    }
+    var h = data.z.length;
+    if (!h) throw new Error("[ol/source/Contour] Empty z grid.");
+    var w = Array.isArray(data.z[0]) ? data.z[0].length : 0;
+    if (!w) throw new Error("[ol/source/Contour] Invalid z grid width.");
+    for (var j = 0; j < h; j++) {
+      if (
+        !Array.isArray(data.x[j]) ||
+        !Array.isArray(data.y[j]) ||
+        !Array.isArray(data.z[j]) ||
+        data.x[j].length !== w ||
+        data.y[j].length !== w ||
+        data.z[j].length !== w
+      ) {
+        throw new Error(
+          "[ol/source/Contour] x/y/z grids must have identical rectangular shape.",
+        );
+      }
+    }
+    var values = new Array(w * h);
+    for (var jj = 0; jj < h; jj++) {
+      for (var ii = 0; ii < w; ii++) {
+        var zv = data.z[jj][ii];
+        values[jj * w + ii] = (zv === null || typeof zv === "undefined") ? NaN : Number(zv);
+      }
+    }
+    return {
+      raw: data,
+      width: w,
+      height: h,
+      x: data.x,
+      y: data.y,
+      values: values,
+    };
+  }
+  /** Convert contour grid coordinates into map coordinates
+   * @param {Array} coordinates
+   * @param {*} grid
+   * @returns {Array}
+   * @private
+   */
+  _gridToMapCoordinates(coordinates, grid) {
+    return coordinates.map(
+      function (poly) {
+        return poly.map(
+          function (ring) {
+            var r = ring.map(
+              function (pt) {
+                return this._unitToGeographic(grid.x, grid.y, pt[1], pt[0]);
+              }.bind(this),
+            );
+            if (
+              r.length &&
+              (r[0][0] !== r[r.length - 1][0] || r[0][1] !== r[r.length - 1][1])
+            ) {
+              r.push(r[0]);
+            }
+            return r;
+          }.bind(this),
+        );
+      }.bind(this),
+    );
+  }
+  /** Convert unit grid coordinates into geographic coordinates (leaflet-contour style)
+   * @param {Array<Array<number>>} gridx
+   * @param {Array<Array<number>>} gridy
+   * @param {number} i
+   * @param {number} j
+   * @returns {Array<number>}
+   * @private
+   */
+  _unitToGeographic(gridx, gridy, i, j) {
+    var ii = Math.floor(i);
+    var jj = Math.floor(j);
+    var x, y;
+    if (
+      gridx[ii][jj] !== null &&
+      gridx[ii][jj + 1] !== null &&
+      gridx[ii + 1][jj] !== null &&
+      gridx[ii + 1][jj + 1] !== null
+    ) {
+      x =
+        ((gridx[ii + 1][jj + 1] - gridx[ii + 1][jj]) * (j - jj) +
+          gridx[ii + 1][jj] +
+          ((gridx[ii][jj + 1] - gridx[ii][jj]) * (j - jj) + gridx[ii][jj])) /
+        2;
+      y =
+        ((gridy[ii + 1][jj] - gridy[ii][jj]) * (i - ii) +
+          gridy[ii][jj] +
+          ((gridy[ii + 1][jj + 1] - gridy[ii][jj + 1]) * (i - ii) +
+            gridy[ii][jj + 1])) /
+        2;
+    } else {
+      x = gridx[ii][jj];
+      y = gridy[ii][jj];
+    }
+    return [x, y];
+  }
+};
 
 /*	Copyright (c) 2015 Jean-Marc VIGLINO, 
   released under the CeCILL-B license (French BSD license)
@@ -42902,8 +43275,21 @@ ol.style.Chart = class olstyleChart extends ol.style.RegularShape {
    */
   getImage(pixelratio) {
     pixelratio = pixelratio || 1;
+    this.renderOptions_ = this.createRenderOptions();
     // Get canvas
-    var canvas = super.getImage(pixelratio);
+    var image = super.getImage(pixelratio);
+    if (image && image.getContext) {
+      this.draw_(this.renderOptions_, image.getContext('2d'), pixelratio);
+    }
+    return image;
+  }
+  /**
+   * @private
+   * @param {RenderOptions} renderOptions Render options.
+   * @param {CanvasRenderingContext2D} context The rendering context.
+   * @param {number} pixelRatio The pixel ratio.
+   */
+  draw_(renderOptions, context, pixelratio) {
     if (this._done === pixelratio) return canvas;
     this._done = pixelratio
     var strokeStyle;
@@ -42913,7 +43299,7 @@ ol.style.Chart = class olstyleChart extends ol.style.RegularShape {
       strokeWidth = this._stroke.getWidth();
     }
     // draw the circle on the canvas
-    var context = (canvas.getContext('2d'));
+    var canvas = context.canvas;
     context.save();
     // reset transform
     context.setTransform(pixelratio, 0, 0, pixelratio, 0, 0);
@@ -44089,6 +44475,7 @@ ol.style.FontSymbol = class olstyleFontSymbol extends ol.style.RegularShape {
     if (!this.getDisplacement){
       this.getImage();
     }
+    this.getImage();
     this.render();
   }
   /** Static function : add new font defs
@@ -44245,22 +44632,34 @@ ol.style.FontSymbol = class olstyleFontSymbol extends ol.style.RegularShape {
   getImage(pixelratio) {
     pixelratio = pixelratio || 1;
     // get canvas
-    var canvas = super.getImage(pixelratio);
-    var strokeStyle;
-    var strokeWidth = 0;
-    if (this._stroke) {
-      strokeStyle = ol.color.asString(this._stroke.getColor());
-      strokeWidth = this._stroke.getWidth();
+    var image = super.getImage(pixelratio);
+    // Draw the symbol on the canvas (ol<10.8)
+    if (image && image.getContext) {
+      /** @type {ol.style.FontSymbol.RenderOptions} */
+      var renderOptions = {
+        width: image.width,
+        height: image.height,
+      };
+      this.draw_(renderOptions, image.getContext('2d'), pixelratio);
     }
-    /** @type {ol.style.FontSymbol.RenderOptions} */
-    var renderOptions = {
-      strokeStyle: strokeStyle,
-      strokeWidth: strokeWidth,
-      size: canvas.width / pixelratio,
-    };
+    return image;
+  }
+  /**
+   * @private
+   * @param {RenderOptions} renderOptions Render options.
+   * @param {CanvasRenderingContext2D} context The rendering context.
+   * @param {number} pixelRatio The pixel ratio.
+   */
+  draw_(renderOptions, context, pixelratio) {
+    renderOptions.strokeWidth = 0;
+    var canvas = context.canvas;
+    renderOptions.size = canvas.width / pixelratio;
+    if (this._stroke) {
+      renderOptions.strokeStyle = ol.color.asString(this._stroke.getColor());
+      renderOptions.strokeWidth = this._stroke.getWidth();
+    }
     // draw the circle on the canvas
-    var context = (canvas.getContext('2d'));
-    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.clearRect(0, 0, renderOptions.width, renderOptions.height);
     this.drawMarker_(renderOptions, context, 0, 0, pixelratio);
     // Set anchor / displacement
     if (!this.getDisplacement) {
@@ -44268,7 +44667,6 @@ ol.style.FontSymbol = class olstyleFontSymbol extends ol.style.RegularShape {
       a[0] = canvas.width / 2 - this._offset[0];
       a[1] = canvas.width / 2 - this._offset[1];
     }
-    return canvas;
   }
   /**
    * @private
@@ -44683,6 +45081,7 @@ ol.style.Photo = class olstylePhoto extends ol.style.RegularShape {
         this._src,
         this._shadow,
         this._kind,
+        this._loaded,
       ].join('-')
     return opt;
   }
@@ -44698,23 +45097,37 @@ ol.style.Photo = class olstylePhoto extends ol.style.RegularShape {
     if ((this._gethit || this.img_) && this._currentRatio === pixelratio) return canvas;
     // Calculate image at pixel ratio
     this._currentRatio = pixelratio;
+    // Draw hitdetection image
+    this._gethit = true
+      var context = this.getHitDetectionImage().getContext('2d')
+      context.save()
+      context.setTransform(1, 0, 0, 1, 0, 0)
+      this.drawBack_(context, "#000", this._stroke ? this._stroke.getWidth() : 0, 1)
+      context.fill()
+      context.restore()
+    this._gethit = false
+    if (canvas && canvas.getContext) {
+      this._loaded = false;
+      this.draw_(this.createRenderOptions(), canvas.getContext('2d'), pixelratio)
+    }
+    return canvas;
+  }
+  /**
+   * @private
+   * @param {RenderOptions} renderOptions Render options.
+   * @param {CanvasRenderingContext2D} context The rendering context.
+   * @param {number} pixelRatio The pixel ratio.
+   */
+  draw_(renderOptions, context, pixelratio) {
     var strokeStyle
     var strokeWidth = 0
     if (this._stroke) {
       strokeStyle = ol.color.asString(this._stroke.getColor())
       strokeWidth = this._stroke.getWidth()
     }
-    // Draw hitdetection image
-    this._gethit = true
-      var context = this.getHitDetectionImage().getContext('2d')
-      context.save()
-      context.setTransform(1, 0, 0, 1, 0, 0)
-      this.drawBack_(context, "#000", strokeWidth, 1)
-      context.fill()
-      context.restore()
-    this._gethit = false
     // Draw the image
-    context = canvas.getContext('2d')
+    //context = canvas.getContext('2d')
+    var canvas = context.canvas;
     context.save()
     context.setTransform(pixelratio, 0, 0, pixelratio, 0, 0)
     this.drawBack_(context, strokeStyle, strokeWidth, pixelratio)
@@ -44736,6 +45149,8 @@ ol.style.Photo = class olstylePhoto extends ol.style.RegularShape {
       self.drawImage_(canvas, img, pixelratio)
     } else {
       img.onload = function () {
+        self._loaded = true;
+        self.renderOptions_ = self.createRenderOptions();
         self.drawImage_(canvas, img, pixelratio)
         // Force change (?!)
         // self.setScale(1);
@@ -44999,7 +45414,7 @@ ol.style.Profile = class olstyleProfile extends ol.style.Style {
           ctx.arc(p[0], yElev, vertexSize, 0, 2 * Math.PI);
           ctx.moveTo(p[0] + vertexSize, yElev);
         }
-      };
+      }
       ctx.fill();
     }
     p0 = geom[0]
@@ -45305,10 +45720,24 @@ ol.style.Shadow = class olstyleShadow extends ol.style.RegularShape {
    */
   getImage(pixelratio) {
     pixelratio = pixelratio || 1;
+    var image = super.getImage(pixelratio);
+    if (image && image.getContext) {
+      var renderOptions = this.createRenderOptions();
+      this.draw_(renderOptions, image.getContext('2d'), pixelratio);
+    }
+    return image;
+  }
+  /**
+   * @private
+   * @param {RenderOptions} renderOptions Render options.
+   * @param {CanvasRenderingContext2D} context The rendering context.
+   * @param {number} pixelRatio The pixel ratio.
+   */
+  draw_(renderOptions, context, pixelratio) {
     var radius = this._radius;
-    var canvas = super.getImage(pixelratio);
     // Remove the circle on the canvas
-    var context = (canvas.getContext('2d'));
+    // var context = (canvas.getContext('2d'));
+    var canvas = context.canvas;
     context.save();
     context.resetTransform();
     context.clearRect(0, 0, canvas.width, canvas.height);
@@ -45334,6 +45763,211 @@ ol.style.Shadow = class olstyleShadow extends ol.style.RegularShape {
     return canvas;
   }
 }
+
+/*	Copyright (c) 2016 Jean-Marc VIGLINO, 
+  released under the CeCILL-B license (French BSD license)
+  (http://www.cecill.info/licences/Licence_CeCILL-B_V1-en.txt).
+*/
+/**
+ * @classdesc
+ * Applies an image-based stroke to vector features
+ *
+ * @constructor
+ * @param {Object} options
+ *  @param {ol.style.Icon} options.icon Icon style to be applied to stroke
+ *  @param {string} [options.fallbackColor] Alternative stroke if segment length is less than image width
+ *  @param {boolean} [options.isVectorTile] Toggle to true if applying stroke into VectorTile layer
+ *  @param {ol.Map} [options.map] map instance. required if applying style to VectorTile Layer to determine point location on tile extent.
+ * @extends {ol.style.Style}
+ * @example
+ * function getStyle(feature) {
+ *   return new ol.style.StrokeImage({
+ *     icon: new ol.style.Icon({
+ *       src: "../data/stroke-image-sprint.png",
+ *       size: [116, 20],
+ *       offset: [40, 40],
+ *     }),
+ *     fallbackColor: '#c844c5',
+ *   });
+ * }
+ *
+ * var vector = new ol.layer.Vector({
+ *   source: new ol.source.Vector(),
+ *   style: getStyle,
+ * });
+ */
+ol.style.StrokeImage = class olstyleStrokeImage extends ol.style.Style {
+  /**
+   * @param {Object} options
+   *  @param {ol.style.Icon} options.icon Icon style to be applied to stroke
+   *  @param {string} [options.fallbackColor] Alternative stroke if segment length is less than image width
+   *  @param {boolean} [options.isVectorTile] Toggle to true if applying stroke into VectorTile layer
+   *  @param {ol.Map} [options.map] map instance. required if applying style to VectorTile Layer to determine point location on tile extent.
+   */
+  constructor(options) {
+    super({ renderer: (a, b) => this._renderer(a, b) });
+    this.icon = options.icon;
+    this.fallbackColor = options.fallbackColor;
+    this.isVectorTile = options.isVectorTile;
+    this.map = options.map;
+    if (this.icon) this.icon.load();
+  }
+  /**
+   *
+   * @param {ol.coordinate.Coordinate | ol.coordinate.Coordinate[] | ol.coordinate.Coordinate[][] | ol.coordinate.Coordinate[][][]} pixelCoordinates
+   * @param {ol.render.State} state
+   * @private
+   */
+  _renderer(pixelCoordinates, state) {
+    if (!["LineString", "Polygon"].includes(state.geometry.getType())) {
+      return;
+    }
+    var ctx = state.context;
+    /**
+     *
+     * @param {ol.coordinate.Coordinate[]} coordinates
+     * @param {boolean} checkExtent
+     */
+    var draw = (coordinates, checkExtent = false) => {
+      var ps = coordinates.slice(0, 12);
+      var extent = state.geometry.getExtent();
+      var flatCoords = state.geometry.getFlatCoordinates();
+      var pLength =
+        state.geometry.getType() == "Polygon" ? ps.length - 1 : ps.length - 1;
+      for (var i = 0; i < pLength; i++) {
+        var p1 = ps[i];
+        var p2 = ps[i + 1];
+        if (checkExtent && !!this.map) {
+          if (!checkExtentIntersection(extent, p1, p2)) continue;
+        }
+        var dx = p2[0] - p1[0];
+        var dy = p2[1] - p1[1];
+        var rotation = Math.atan2(dy, dx);
+        var icon = this.icon;
+        var iconWidth = icon.getWidth();
+        var iconHeight = icon.getHeight();
+        var iconOrigin = icon.getOrigin();
+        var segments = this._splitLineIntoSegments(p1, p2, iconWidth || 1);
+        for (var j = 0; j < segments.length; j++) {
+          var { p, length } = segments[j];
+          if (
+            !this.fallbackColor ||
+            (length == (iconWidth || 1) && segments.length > 2)
+          ) {
+            ctx.save();
+            ctx.imageSmoothingEnabled = false;
+            ctx.translate(p[0], p[1]);
+            ctx.rotate(rotation);
+            ctx.drawImage(
+              icon.getImage(),
+              iconOrigin[0],
+              iconOrigin[1],
+              length,
+              iconHeight,
+              0,
+              -iconHeight / 2,
+              length,
+              iconHeight,
+            );
+            ctx.restore();
+          } else {
+            var nextSegment = segments[j + 1];
+            if (!nextSegment) continue;
+            if (this.fallbackColor) ctx.strokeStyle = this.fallbackColor;
+            ctx.lineWidth = 1;
+            var p0 = p;
+            var p1 = nextSegment.p;
+            ctx.beginPath();
+            ctx.moveTo(p0[0], p0[1]);
+            ctx.lineTo(p1[0], p1[1]);
+            ctx.closePath();
+            ctx.stroke();
+          }
+        }
+      }
+    };
+    switch (state.geometry.getType()) {
+      case "LineString":
+      default:
+        draw(pixelCoordinates);
+        break;
+      case "Polygon":
+        for (var i = 0; i < pixelCoordinates.length; i++) {
+          var _pixelCoordinates = pixelCoordinates;
+          draw(_pixelCoordinates[i], this.isVectorTile);
+        }
+        break;
+    }
+  }
+  /**
+   * @typedef {Object} Segment
+   * @property {number[]} p
+   * @property {number} length
+   */
+  /**
+   * @param {number[]} p1
+   * @param {number[]} p2
+   * @param {number} segmentLength
+   * @returns {Segment[]}
+   * @private
+   */
+  _splitLineIntoSegments(p1, p2, segmentLength) {
+    var dx = p2[0] - p1[0];
+    var dy = p2[1] - p1[1];
+    var totalDistance = Math.sqrt(dx * dx + dy * dy);
+    if (totalDistance <= segmentLength || segmentLength <= 0) {
+      return [
+        { p: [p1[0], p1[1]], length: totalDistance },
+        { p: [p2[0], p2[1]], length: 0 },
+      ];
+    }
+    var trDistance = totalDistance - segmentLength;
+    var numSegments = Math.floor(totalDistance / segmentLength);
+    var segments = [
+      {
+        p: [p1[0], p1[1]],
+        length: numSegments > 1 ? segmentLength : segmentLength,
+      },
+    ];
+    for (var i = 1; i <= numSegments; i++) {
+      var t = (i * segmentLength) / totalDistance;
+      var x = p1[0] + t * dx;
+      var y = p1[1] + t * dy;
+      segments.push({
+        p: [x, y],
+        length: i < numSegments ? segmentLength : trDistance,
+      });
+      trDistance -= segmentLength;
+    }
+    segments.push({
+      p: [p2[0], p2[1]],
+      length: 0,
+    });
+    return segments;
+  }
+  /**
+   *
+   * @param {ol.extent.Extent} Extent
+   * @param {ol.coordinate.Coordinate} p1
+   * @param {ol.coordinate.Coordinate} p2
+   * @private
+   */
+  _checkExtentIntersection(extent, p1, p2) {
+    var px1 = this.map.getPixelFromCoordinate([extent[0], extent[1]]);
+    var px2 = this.map.getPixelFromCoordinate([extent[2], extent[3]]);
+    if (
+      (p1[0] <= px1[0] && p2[0] <= px1[0]) ||
+      (p1[0] >= px2[0] && p2[0] >= px2[0])
+    )
+      return false;
+    if (
+      (p1[1] >= px1[1] && p2[1] >= px1[1]) ||
+      (p1[1] <= px2[1] && p2[1] <= px2[1])
+    )
+      return false;
+    return true;
+  }
+};
 
 /*	Copyright (c) 2018 Jean-Marc VIGLINO, 
 	released under the CeCILL-B license (French BSD license)

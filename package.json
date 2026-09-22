@@ -1,6 +1,6 @@
 {
   "name": "ol-ext",
-  "version": "4.0.35",
+  "version": "4.0.39",
   "description": "A set of cool extensions for OpenLayers (ol) in node modules structure",
   "main": "dist/ol-ext.js",
   "style": "dist/ol-ext.css",
@@ -18,7 +18,6 @@
     "gulp-header": "^2.0.5",
     "gulp-minify": "^3.1.0",
     "gulp-watch": "^5.0.1",
-    "gulp-jsdoc3": "^2.0.0",
     "live-server": "^1.2.0",
     "minimist": "^1.2.0",
     "plugin-error": "^1.0.1",
@@ -74,7 +73,5 @@
     "type": "git",
     "url": "git+https://github.com/Viglino/ol-ext.git"
   },
-  "license": "BSD-3-Clause",
-  "dependencies": {
-  }
+  "license": "BSD-3-Clause"
 }

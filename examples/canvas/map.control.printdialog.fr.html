@@ -84,6 +84,7 @@
       <option value='zh'>China (zh)</option>
       <option value='it'>Italia (it)</option>
       <option value='pt-br'>Brazil (pt-br)</option>
+      <option value='rm'>Romansh (rm)</option>
     </select>
     <br/>
     Create <a href="https://github.com/Viglino/ol-ext/issues/new">an issue</a> to ask for a new language or make a pull request...
@@ -148,29 +149,6 @@
       }]
     });
 
-    ol.control.PrintDialog.prototype.formats = [{
-      title: 'Copier dans le presse-papier',
-      imageType: 'image/png',
-      clipboard: true
-    }, {
-      title: 'Enregistrer en jpeg (qualité supérieure)',
-      imageType: 'image/jpeg',
-      quality: .8
-    }, {
-      title: 'Enregistrer en jpeg (qualité maximale)',
-      imageType: 'image/jpeg',
-      quality: 1
-    }, {
-      title: 'Enregistrer en png',
-      imageType: 'image/png',
-      quality: .92
-    }, {
-      title: 'Enregistrer en pdf',
-      imageType: 'image/jpeg',
-      quality: .92,
-      pdf: true
-    }
-  ];
   // Control
   var legendCtrl = new ol.control.Legend({ legend: legend });
   map.addControl(legendCtrl);
